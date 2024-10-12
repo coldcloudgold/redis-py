@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import logging
 import random
 import socket
 import ssl
@@ -70,6 +71,8 @@ from redis.utils import (
     safe_str,
     str_if_bytes,
 )
+
+logger = logging.getLogger(__name__)
 
 TargetNodesT = TypeVar(
     "TargetNodesT", str, "ClusterNode", List["ClusterNode"], Dict[Any, "ClusterNode"]
@@ -1226,20 +1229,39 @@ class NodesManager:
         startup_nodes_reachable = False
         fully_covered = False
         exception = None
+        startup_node = "CUSTOM_STUB"
+        logger.info("START CHECK NODES")
+
         for startup_node in self.startup_nodes.values():
+            logger.info(
+                f"1. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+            )
             try:
                 # Make sure cluster mode is enabled on this node
                 try:
                     cluster_slots = await startup_node.execute_command("CLUSTER SLOTS")
+                    logger.info(
+                        f"2. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`, `{cluster_slots=}`"
+                    )
                 except ResponseError:
+                    logger.error(
+                        f"3. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+                        ". except `ResponseError` and raise `RedisClusterException`"
+                    )
                     raise RedisClusterException(
                         "Cluster mode is not enabled on this node"
                     )
                 startup_nodes_reachable = True
+                logger.info(
+                    f"4. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+                )
             except Exception as e:
                 # Try the next startup node.
                 # The exception is saved and raised only if we have no more nodes.
                 exception = e
+                logger.error(
+                    f"5. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+                )
                 continue
 
             # CLUSTER SLOTS command results in the following output:
@@ -1319,7 +1341,13 @@ class NodesManager:
             if fully_covered:
                 break
 
+        logger.info(
+            f"6. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+        )
         if not startup_nodes_reachable:
+            logger.error(
+                f"7. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+            )
             raise RedisClusterException(
                 f"Redis Cluster cannot be connected. Please provide at least "
                 f"one reachable node: {str(exception)}"
