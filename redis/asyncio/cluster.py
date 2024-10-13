@@ -74,6 +74,8 @@ from redis.utils import (
 
 logger = logging.getLogger(__name__)
 
+CLUSTER_NODES = "CLUSTER NODES"
+
 TargetNodesT = TypeVar(
     "TargetNodesT", str, "ClusterNode", List["ClusterNode"], Dict[Any, "ClusterNode"]
 )
@@ -357,6 +359,7 @@ class RedisCluster(AbstractRedis, AbstractRedisCluster, AsyncRedisClusterCommand
             kwargs["response_callbacks"].update(_RedisCallbacksRESP2)
         self.connection_kwargs = kwargs
 
+        logger.info(f"[{CLUSTER_NODES}]: `{startup_nodes=}`")
         if startup_nodes:
             passed_nodes = []
             for node in startup_nodes:
@@ -368,6 +371,7 @@ class RedisCluster(AbstractRedis, AbstractRedisCluster, AsyncRedisClusterCommand
             startup_nodes = []
         if host and port:
             startup_nodes.append(ClusterNode(host, port, **self.connection_kwargs))
+        logger.info(f"[{CLUSTER_NODES}]: `{startup_nodes=}`")
 
         self.nodes_manager = NodesManager(
             startup_nodes,
@@ -1107,6 +1111,7 @@ class NodesManager:
         address_remap: Optional[Callable[[Tuple[str, int]], Tuple[str, int]]] = None,
     ) -> None:
         self.startup_nodes = {node.name: node for node in startup_nodes}
+        logger.info(f"[{CLUSTER_NODES}]: `{startup_nodes=}`, `{self.startup_nodes=}`")
         self.require_full_coverage = require_full_coverage
         self.connection_kwargs = connection_kwargs
         self.address_remap = address_remap
@@ -1230,22 +1235,22 @@ class NodesManager:
         fully_covered = False
         exception = None
         startup_node = "CUSTOM_STUB"
-        logger.info("START CHECK NODES")
+        logger.info(f"[{CLUSTER_NODES}]: `{self.startup_nodes=}`")
 
         for startup_node in self.startup_nodes.values():
             logger.info(
-                f"1. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+                f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
             )
             try:
                 # Make sure cluster mode is enabled on this node
                 try:
                     cluster_slots = await startup_node.execute_command("CLUSTER SLOTS")
                     logger.info(
-                        f"2. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`, `{cluster_slots=}`"
+                        f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`, `{cluster_slots=}`"
                     )
                 except ResponseError:
                     logger.error(
-                        f"3. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+                        f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
                         ". except `ResponseError` and raise `RedisClusterException`"
                     )
                     raise RedisClusterException(
@@ -1253,14 +1258,14 @@ class NodesManager:
                     )
                 startup_nodes_reachable = True
                 logger.info(
-                    f"4. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+                    f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
                 )
             except Exception as e:
                 # Try the next startup node.
                 # The exception is saved and raised only if we have no more nodes.
                 exception = e
                 logger.error(
-                    f"5. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+                    f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
                 )
                 continue
 
@@ -1342,11 +1347,11 @@ class NodesManager:
                 break
 
         logger.info(
-            f"6. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+            f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
         )
         if not startup_nodes_reachable:
             logger.error(
-                f"7. `{repr(startup_node)}`:: `{startup_nodes_reachable=}`, `{exception=}`"
+                f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
             )
             raise RedisClusterException(
                 f"Redis Cluster cannot be connected. Please provide at least "
