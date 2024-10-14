@@ -1368,6 +1368,7 @@ class NodesManager:
                 f"covered..."
             )
 
+        logger.info(f"[{CLUSTER_NODES}]: `{self.nodes_cache=}`, `{tmp_nodes_cache=}`")
         # Set the tmp variables to the real variables
         self.slots_cache = tmp_slots
         self.set_nodes(self.nodes_cache, tmp_nodes_cache, remove_old=True)
