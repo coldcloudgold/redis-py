@@ -71,6 +71,7 @@ from redis.utils import (
     safe_str,
     str_if_bytes,
 )
+from collections import deque
 
 logger = logging.getLogger(__name__)
 
@@ -1121,6 +1122,7 @@ class NodesManager:
         self.slots_cache: Dict[int, List["ClusterNode"]] = {}
         self.read_load_balancer = LoadBalancer()
         self._moved_exception: MovedError = None
+        self._history_nodes = []
 
     def get_node(
         self,
@@ -1234,39 +1236,35 @@ class NodesManager:
         startup_nodes_reachable = False
         fully_covered = False
         exception = None
+
         startup_node = "CUSTOM_STUB"
-        logger.info(f"[{CLUSTER_NODES}]: `{self.startup_nodes=}`")
+        history_changed = False
+        logger.info(
+            f"[{CLUSTER_NODES}]: `{self.startup_nodes=}`, `{len(self._history_nodes)=}`"
+        )
 
         for startup_node in self.startup_nodes.values():
-            logger.info(
-                f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
-            )
             try:
                 # Make sure cluster mode is enabled on this node
                 try:
                     cluster_slots = await startup_node.execute_command("CLUSTER SLOTS")
                     logger.info(
-                        f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`, `{cluster_slots=}`"
+                        f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{cluster_slots=}`"
                     )
+
+                    if not self._history_nodes or cluster_slots != self._history_nodes[-1]:
+                        self._history_nodes.append(cluster_slots)
+                        history_changed = True
+
                 except ResponseError:
-                    logger.error(
-                        f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
-                        ". except `ResponseError` and raise `RedisClusterException`"
-                    )
                     raise RedisClusterException(
                         "Cluster mode is not enabled on this node"
                     )
                 startup_nodes_reachable = True
-                logger.info(
-                    f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
-                )
             except Exception as e:
                 # Try the next startup node.
                 # The exception is saved and raised only if we have no more nodes.
                 exception = e
-                logger.error(
-                    f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
-                )
                 continue
 
             # CLUSTER SLOTS command results in the following output:
@@ -1346,11 +1344,19 @@ class NodesManager:
             if fully_covered:
                 break
 
-        logger.info(f"[{CLUSTER_NODES}]: `{self.nodes_cache=}`, `{tmp_nodes_cache=}`")
-        if not startup_nodes_reachable:
+        if history_changed:
+            self._history_nodes.append(tmp_nodes_cache)
+
+        logger.info(
+            f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`"
+        )
+
+        if len(tmp_nodes_cache) == 0 or len(self.startup_nodes) == 0:
             logger.error(
-                f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
+                f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, `{self._history_nodes=}`"
             )
+
+        if not startup_nodes_reachable:
             raise RedisClusterException(
                 f"Redis Cluster cannot be connected. Please provide at least "
                 f"one reachable node: {str(exception)}"
