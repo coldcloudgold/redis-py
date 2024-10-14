@@ -1346,9 +1346,7 @@ class NodesManager:
             if fully_covered:
                 break
 
-        logger.info(
-            f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
-        )
+        logger.info(f"[{CLUSTER_NODES}]: `{self.nodes_cache=}`, `{tmp_nodes_cache=}`")
         if not startup_nodes_reachable:
             logger.error(
                 f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{startup_nodes_reachable=}`, `{exception=}`"
@@ -1368,7 +1366,6 @@ class NodesManager:
                 f"covered..."
             )
 
-        logger.info(f"[{CLUSTER_NODES}]: `{self.nodes_cache=}`, `{tmp_nodes_cache=}`")
         # Set the tmp variables to the real variables
         self.slots_cache = tmp_slots
         self.set_nodes(self.nodes_cache, tmp_nodes_cache, remove_old=True)
