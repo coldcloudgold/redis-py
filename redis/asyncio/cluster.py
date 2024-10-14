@@ -1252,8 +1252,9 @@ class NodesManager:
                     logger.info(
                         f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{cluster_slots=}`"
                     )
-                    if cluster_slots not in self._history_nodes:
-                        self._history_nodes.append(cluster_slots)
+                    cluster_slots_as_str = str(cluster_slots)
+                    if cluster_slots_as_str not in self._history_nodes:
+                        self._history_nodes.append(cluster_slots_as_str)
                         history_changed = True
 
                 except ResponseError:
