@@ -1102,6 +1102,7 @@ class NodesManager:
         "slots_cache",
         "startup_nodes",
         "address_remap",
+        "_history_nodes",
     )
 
     def __init__(
@@ -1122,7 +1123,7 @@ class NodesManager:
         self.slots_cache: Dict[int, List["ClusterNode"]] = {}
         self.read_load_balancer = LoadBalancer()
         self._moved_exception: MovedError = None
-        self._history_nodes = []
+        self._history_nodes = deque(maxlen=512)
 
     def get_node(
         self,
