@@ -5,6 +5,8 @@ import random
 import socket
 import ssl
 import warnings
+from collections import deque
+from copy import deepcopy
 from typing import (
     Any,
     Callable,
@@ -71,7 +73,6 @@ from redis.utils import (
     safe_str,
     str_if_bytes,
 )
-from collections import deque
 
 logger = logging.getLogger(__name__)
 
@@ -1103,6 +1104,7 @@ class NodesManager:
         "startup_nodes",
         "address_remap",
         "_history_nodes",
+        "_startup_nodes_original",
     )
 
     def __init__(
@@ -1124,6 +1126,7 @@ class NodesManager:
         self.read_load_balancer = LoadBalancer()
         self._moved_exception: MovedError = None
         self._history_nodes = {}
+        self._startup_nodes_original = deepcopy(self.startup_nodes)
 
     def get_node(
         self,
@@ -1229,7 +1232,7 @@ class NodesManager:
             if node.server_type == server_type
         ]
 
-    async def initialize(self) -> None:
+    async def initialize(self, is_repeat: bool = False) -> None:
         self.read_load_balancer.reset()
         tmp_nodes_cache: Dict[str, "ClusterNode"] = {}
         tmp_slots: Dict[int, List["ClusterNode"]] = {}
@@ -1241,7 +1244,7 @@ class NodesManager:
         startup_node = "CUSTOM_STUB"
         all_cluster_slots_as_str = []
         logger.info(
-            f"[{CLUSTER_NODES}]: `{self.startup_nodes=}`, `{len(self._history_nodes)=}`"
+            f"[{CLUSTER_NODES}]: `{is_repeat=}` `{self.startup_nodes=}`, `{len(self._history_nodes)=}`"
         )
 
         for startup_node in self.startup_nodes.values():
@@ -1343,22 +1346,40 @@ class NodesManager:
             if fully_covered:
                 break
 
+        tmp_nodes_cache_as_str = str(tmp_nodes_cache)
+
         for cluster_slots_as_str in all_cluster_slots_as_str:
             if cluster_slots_as_str not in self._history_nodes:
-                self._history_nodes[cluster_slots_as_str] = [tmp_nodes_cache]
+                self._history_nodes[cluster_slots_as_str] = [tmp_nodes_cache_as_str]
                 continue
 
-            if self._history_nodes[cluster_slots_as_str][-1] != tmp_nodes_cache:
-                self._history_nodes[cluster_slots_as_str].append(tmp_nodes_cache)
+            if self._history_nodes[cluster_slots_as_str][-1] != tmp_nodes_cache_as_str:
+                self._history_nodes[cluster_slots_as_str].append(tmp_nodes_cache_as_str)
+
+        else:
+            cluster_slots_as_str = "NO CLUSTER SLOTS (CUSTOM STUB)"
+
+            if cluster_slots_as_str not in self._history_nodes:
+                self._history_nodes[cluster_slots_as_str] = [tmp_nodes_cache_as_str]
+
+            if self._history_nodes[cluster_slots_as_str][-1] != tmp_nodes_cache_as_str:
+                self._history_nodes[cluster_slots_as_str].append(tmp_nodes_cache_as_str)
 
         logger.info(
-            f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, {self._history_nodes=}"
+            f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, {len(self._history_nodes)=}"
         )
 
         if len(tmp_nodes_cache) == 0 or len(self.startup_nodes) == 0:
             logger.error(
                 f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, `{self._history_nodes=}`"
             )
+
+            if len(self.startup_nodes) == 0 and is_repeat is False:
+                self.startup_nodes = deepcopy(self._startup_nodes_original)
+                logger.warning(
+                    f"[{CLUSTER_NODES}]: reseted blank `{self.startup_nodes=}`. Repeat initialize..."
+                )
+                return await self.initialize(is_repeat=True)
 
         if not startup_nodes_reachable:
             raise RedisClusterException(
