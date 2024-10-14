@@ -1356,7 +1356,7 @@ class NodesManager:
             if self._history_nodes[cluster_slots_as_str][-1] != tmp_nodes_cache_as_str:
                 self._history_nodes[cluster_slots_as_str].append(tmp_nodes_cache_as_str)
 
-        else:
+        if not all_cluster_slots_as_str:
             cluster_slots_as_str = "NO CLUSTER SLOTS (CUSTOM STUB)"
 
             if cluster_slots_as_str not in self._history_nodes:
@@ -1366,7 +1366,7 @@ class NodesManager:
                 self._history_nodes[cluster_slots_as_str].append(tmp_nodes_cache_as_str)
 
         logger.info(
-            f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, {len(self._history_nodes)=}"
+            f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, `{len(self._history_nodes)=}`"
         )
 
         if len(tmp_nodes_cache) == 0 or len(self.startup_nodes) == 0:
