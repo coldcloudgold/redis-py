@@ -1123,7 +1123,7 @@ class NodesManager:
         self.slots_cache: Dict[int, List["ClusterNode"]] = {}
         self.read_load_balancer = LoadBalancer()
         self._moved_exception: MovedError = None
-        self._history_nodes = deque(maxlen=512)
+        self._history_nodes = deque(maxlen=2048)
 
     def get_node(
         self,
@@ -1252,8 +1252,7 @@ class NodesManager:
                     logger.info(
                         f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{cluster_slots=}`"
                     )
-
-                    if not self._history_nodes or cluster_slots != self._history_nodes[-1]:
+                    if cluster_slots not in self._history_nodes:
                         self._history_nodes.append(cluster_slots)
                         history_changed = True
 
