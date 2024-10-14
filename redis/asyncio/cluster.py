@@ -1123,7 +1123,7 @@ class NodesManager:
         self.slots_cache: Dict[int, List["ClusterNode"]] = {}
         self.read_load_balancer = LoadBalancer()
         self._moved_exception: MovedError = None
-        self._history_nodes = deque(maxlen=2048)
+        self._history_nodes = {}
 
     def get_node(
         self,
@@ -1239,7 +1239,7 @@ class NodesManager:
         exception = None
 
         startup_node = "CUSTOM_STUB"
-        history_changed = False
+        all_cluster_slots_as_str = []
         logger.info(
             f"[{CLUSTER_NODES}]: `{self.startup_nodes=}`, `{len(self._history_nodes)=}`"
         )
@@ -1253,9 +1253,7 @@ class NodesManager:
                         f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{cluster_slots=}`"
                     )
                     cluster_slots_as_str = str(cluster_slots)
-                    if cluster_slots_as_str not in self._history_nodes:
-                        self._history_nodes.append(cluster_slots_as_str)
-                        history_changed = True
+                    all_cluster_slots_as_str.append(cluster_slots_as_str)
 
                 except ResponseError:
                     raise RedisClusterException(
@@ -1345,8 +1343,12 @@ class NodesManager:
             if fully_covered:
                 break
 
-        # if history_changed:
-        #     self._history_nodes.append(tmp_nodes_cache)
+        for cluster_slots_as_str in all_cluster_slots_as_str:
+            if cluster_slots_as_str not in self._history_nodes:
+                self._history_nodes[cluster_slots_as_str] = []
+
+            if self._history_nodes[cluster_slots_as_str] != tmp_nodes_cache:
+                self._history_nodes[cluster_slots_as_str].append(tmp_nodes_cache)
 
         logger.info(
             f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, {self._history_nodes=}"
