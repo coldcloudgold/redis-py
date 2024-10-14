@@ -1345,9 +1345,10 @@ class NodesManager:
 
         for cluster_slots_as_str in all_cluster_slots_as_str:
             if cluster_slots_as_str not in self._history_nodes:
-                self._history_nodes[cluster_slots_as_str] = []
+                self._history_nodes[cluster_slots_as_str] = [tmp_nodes_cache]
+                continue
 
-            if self._history_nodes[cluster_slots_as_str] != tmp_nodes_cache:
+            if self._history_nodes[cluster_slots_as_str][-1] != tmp_nodes_cache:
                 self._history_nodes[cluster_slots_as_str].append(tmp_nodes_cache)
 
         logger.info(
