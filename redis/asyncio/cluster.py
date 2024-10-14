@@ -1349,7 +1349,7 @@ class NodesManager:
             self._history_nodes.append(tmp_nodes_cache)
 
         logger.info(
-            f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`"
+            f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, {len(self._history_nodes)=}"
         )
 
         if len(tmp_nodes_cache) == 0 or len(self.startup_nodes) == 0:
