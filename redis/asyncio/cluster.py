@@ -361,7 +361,6 @@ class RedisCluster(AbstractRedis, AbstractRedisCluster, AsyncRedisClusterCommand
             kwargs["response_callbacks"].update(_RedisCallbacksRESP2)
         self.connection_kwargs = kwargs
 
-        logger.info(f"[{CLUSTER_NODES}]: `{startup_nodes=}`")
         if startup_nodes:
             passed_nodes = []
             for node in startup_nodes:
@@ -373,7 +372,6 @@ class RedisCluster(AbstractRedis, AbstractRedisCluster, AsyncRedisClusterCommand
             startup_nodes = []
         if host and port:
             startup_nodes.append(ClusterNode(host, port, **self.connection_kwargs))
-        logger.info(f"[{CLUSTER_NODES}]: `{startup_nodes=}`")
 
         self.nodes_manager = NodesManager(
             startup_nodes,
@@ -1103,7 +1101,6 @@ class NodesManager:
         "slots_cache",
         "startup_nodes",
         "address_remap",
-        "_history_nodes",
         "_startup_nodes_original",
     )
 
@@ -1115,7 +1112,6 @@ class NodesManager:
         address_remap: Optional[Callable[[Tuple[str, int]], Tuple[str, int]]] = None,
     ) -> None:
         self.startup_nodes = {node.name: node for node in startup_nodes}
-        logger.info(f"[{CLUSTER_NODES}]: `{startup_nodes=}`, `{self.startup_nodes=}`")
         self.require_full_coverage = require_full_coverage
         self.connection_kwargs = connection_kwargs
         self.address_remap = address_remap
@@ -1125,7 +1121,6 @@ class NodesManager:
         self.slots_cache: Dict[int, List["ClusterNode"]] = {}
         self.read_load_balancer = LoadBalancer()
         self._moved_exception: MovedError = None
-        self._history_nodes = {}
         self._startup_nodes_original = deepcopy(self.startup_nodes)
 
     def get_node(
@@ -1241,23 +1236,13 @@ class NodesManager:
         fully_covered = False
         exception = None
 
-        startup_node = "CUSTOM_STUB"
-        all_cluster_slots_as_str = []
-        logger.info(
-            f"[{CLUSTER_NODES}]: `{is_repeat=}` `{self.startup_nodes=}`, `{len(self._history_nodes)=}`"
-        )
+        logger.debug(f"[{CLUSTER_NODES}]: `{is_repeat=}` `{self.startup_nodes=}`")
 
         for startup_node in self.startup_nodes.values():
             try:
                 # Make sure cluster mode is enabled on this node
                 try:
                     cluster_slots = await startup_node.execute_command("CLUSTER SLOTS")
-                    logger.info(
-                        f"[{CLUSTER_NODES}]: `{repr(startup_node)}`, `{cluster_slots=}`"
-                    )
-                    cluster_slots_as_str = str(cluster_slots)
-                    all_cluster_slots_as_str.append(cluster_slots_as_str)
-
                 except ResponseError:
                     raise RedisClusterException(
                         "Cluster mode is not enabled on this node"
@@ -1346,40 +1331,22 @@ class NodesManager:
             if fully_covered:
                 break
 
-        tmp_nodes_cache_as_str = str(tmp_nodes_cache)
-
-        for cluster_slots_as_str in all_cluster_slots_as_str:
-            if cluster_slots_as_str not in self._history_nodes:
-                self._history_nodes[cluster_slots_as_str] = [tmp_nodes_cache_as_str]
-                continue
-
-            if self._history_nodes[cluster_slots_as_str][-1] != tmp_nodes_cache_as_str:
-                self._history_nodes[cluster_slots_as_str].append(tmp_nodes_cache_as_str)
-
-        if not all_cluster_slots_as_str:
-            cluster_slots_as_str = "NO CLUSTER SLOTS (CUSTOM STUB)"
-
-            if cluster_slots_as_str not in self._history_nodes:
-                self._history_nodes[cluster_slots_as_str] = [tmp_nodes_cache_as_str]
-
-            if self._history_nodes[cluster_slots_as_str][-1] != tmp_nodes_cache_as_str:
-                self._history_nodes[cluster_slots_as_str].append(tmp_nodes_cache_as_str)
-
-        logger.info(
-            f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, `{len(self._history_nodes)=}`"
+        logger.debug(
+            f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`"
         )
 
-        if len(tmp_nodes_cache) == 0 or len(self.startup_nodes) == 0:
-            logger.error(
-                f"[{CLUSTER_NODES}]: `{tmp_nodes_cache=}`, `{self.nodes_cache=}`, `{self.startup_nodes=}`, `{self._history_nodes=}`"
+        if len(self.startup_nodes) == 0:
+            if is_repeat:
+                raise RedisClusterException(
+                    f"[{CLUSTER_NODES}]: node replacement has already occurred"
+                )
+
+            self.startup_nodes = deepcopy(self._startup_nodes_original)
+            logger.warning(
+                f"[{CLUSTER_NODES}]: reseted blank `{self.startup_nodes=}`. Repeat initialization..."
             )
 
-            if len(self.startup_nodes) == 0 and is_repeat is False:
-                self.startup_nodes = deepcopy(self._startup_nodes_original)
-                logger.warning(
-                    f"[{CLUSTER_NODES}]: reseted blank `{self.startup_nodes=}`. Repeat initialize..."
-                )
-                return await self.initialize(is_repeat=True)
+            return await self.initialize(is_repeat=True)
 
         if not startup_nodes_reachable:
             raise RedisClusterException(
