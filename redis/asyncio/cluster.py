@@ -5,7 +5,6 @@ import random
 import socket
 import ssl
 import warnings
-from collections import deque
 from copy import deepcopy
 from typing import (
     Any,
